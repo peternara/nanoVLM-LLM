@@ -184,20 +184,24 @@ def test_mmstar(model, tokenizer, test_loader, device):
 
 # Cosine learning rate schedule with warmup (from Karpathy)
 # https://github.com/karpathy/build-nanogpt/blob/master/train_gpt2.py#L353
-def get_lr(it, max_lr, max_steps):
-    min_lr = max_lr * 0.1
-    warmup_steps = max_steps * 0.03
-    # 1) linear warmup for warmup_iters steps
+def get_lr(it, max_lr, max_steps):  # 현재 step(it), 최대 학습률(max_lr), 전체 step 수(max_steps) 입력
+    min_lr       = max_lr * 0.1           # 최소 학습률(min_lr)을 최대 학습률의 10%로 지정
+    warmup_steps = max_steps * 0.03 # warmup 단계의 step 수를 전체의 3%로 설정
+
+    # 1) 웜업 단계: warmup_steps 이내라면
     if it < warmup_steps:
-        return max_lr * (it+1) / warmup_steps
-    # 2) if it > lr_decay_iters, return min learning rate
+        return max_lr * (it+1) / warmup_steps   # (it+1)만큼 선형적으로 증가. 0에서 시작해 max_lr까지 천천히 올림
+
+    # 2) 학습이 모두 끝난 경우: max_steps를 넘었으면
     if it > max_steps:
-        return min_lr
-    # 3) in between, use cosine decay down to min learning rate
-    decay_ratio = (it - warmup_steps) / (max_steps - warmup_steps)
-    assert 0 <= decay_ratio <= 1
-    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff starts at 1 and goes to 0
-    return min_lr + coeff * (max_lr - min_lr)
+        return min_lr               # min_lr(최소 학습률)로 고정
+
+    # 3) 그 외에는 cosine decay 적용 (warmup 이후 ~ max_steps 사이)
+    decay_ratio = (it - warmup_steps) / (max_steps - warmup_steps)  # warmup 이후 진행률(0~1)
+    assert 0 <= decay_ratio <= 1                                    # 0~1 사이여야 함(이상치 방지)
+    coeff       = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))           # 코사인 값을 0.5~1로 변환 (시작: 1, 끝: 0)
+    return min_lr + coeff * (max_lr - min_lr)                       # min_lr에서 max_lr까지, 코사인 곡선 형태로 감소
+
 
 def train(train_cfg, vlm_cfg):
     train_loader, val_loader, test_loader = get_dataloaders(train_cfg, vlm_cfg)
