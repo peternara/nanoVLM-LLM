@@ -2,11 +2,10 @@ import torch
 
 class VQACollator(object):  # Visual Question Answering Collator
     def __init__(self, tokenizer, max_length, mp_image_token_length):
-        self.tokenizer = tokenizer
-        self.max_length = max_length
+        self.tokenizer             = tokenizer
+        self.max_length            = max_length
         self.mp_image_token_length = mp_image_token_length
-
-        self.image_token_str = tokenizer.image_token
+        self.image_token_str       = tokenizer.image_token
     
     def __call__(self, batch):
         images  = [item["image"] for item in batch]
