@@ -67,27 +67,37 @@ class VQACollator(object):  # Visual Question Answering Collator
         labels[:, -1]  = -100                                     # Last token has no target, # CrossEntropyLoss에서 ignore_index=-100 사용
 
         # Determine original lengths before padding/truncation to handle truncation cases
+        # 토크나이즈된 각 시퀀스의 길이를 계산
+        #   → 예: self.tokenizer.encode("hello world") → [101, 7592, 2088, 102]
+        #   → 예: len([101, 7592, 2088, 102]) = 4,
+        #   → 예: [4,,,10, 15]
         original_lengths = [len(self.tokenizer.encode(seq)) for seq in input_sequences]
 
         for i in range(len(batch)):
             # Case 1: If sequence was truncated (original is longer than max_length)
-            if original_lengths[i] > self.max_length:
+            if original_lengths[i] > self.max_length:                
+                # max_length보다 긴 경우 전체를 무시(마스킹), 전체 라벨 시퀀스를 -100으로 만듦. # 즉, 전체를 -100, 즉 loss 계산에서 완전히 제외
+                #    → 왜 self.max_length 이후만 해야하는데 왜 전체를 하는가?
+                #    → 이는 시퀀스가 max_length에 맞춰 잘리면서, 뒤쪽(대부분 정답)이 누락 > 일부만 있게 되면 정답으로 유효한가?란 고민 > 그래서, 전체 마스킹 > loss 계산 제외
                 labels[i, :] = -100 # Ignore this sample entirely
+                
                 # print(f"Sample {i} truncated: original length {original_lengths[i]} exceeds max_length {self.max_length}. Ignoring sample.")
                 continue
             
             # Case 2: Sequence fits within max_length
             # Determine the length of the question part for this sample
-            question_part_length = len(self.tokenizer.encode(texts[i], add_special_tokens=False))
+            question_part_length = len(self.tokenizer.encode(texts[i], add_special_tokens=False)) # 이 샘플의 질문(문제) 부분이 토크나이즈됐을 때의 길이 구함 (special token 없이 : add_special_tokens=False)
             
             # Find the position of the first actual token (non-padding)
             # attention_mask might be all zeros if the sequence is fully truncated (handled above) or empty.
             # Ensure there's at least one non-padding token to avoid errors with .nonzero().
             if attention_mask[i].sum() == 0: # Should not happen if not truncated and not empty.
-                labels[i, :] = -100 # Defensive: if no actual tokens, ignore sample
+                labels[i, :] = -100 # Defensive: if no actual tokens, ignore sample # 실제 토큰이 하나도 없는 경우(이상 상황), 전체를 무시 # 즉, 전체를 -100, 즉 loss 계산에서 완전히 제외
                 continue
-            
-            first_token_pos = attention_mask[i].nonzero(as_tuple=True)[0][0].item()
+            # attention_mask[i] = [0, 0,   1, 1, 1, 1, 1,   0, 0, 0]
+            #                      ↑  ↑    ↑  ↑  ↑  ↑  ↑
+            #                       패딩      실제 입력         패딩
+            first_token_pos = attention_mask[i].nonzero(as_tuple=True)[0][0].item() # 실제 입력(패딩이 아닌) 첫 토큰의 인덱스 위치를 찾음
             
             # The total length of the "prompt" part (special image tokens + question)
             total_prompt_length = self.mp_image_token_length + question_part_length
