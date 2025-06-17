@@ -9,12 +9,12 @@ class VQACollator(object):  # Visual Question Answering Collator
         self.image_token_str = tokenizer.image_token
     
     def __call__(self, batch):
-        images = [item["image"] for item in batch]
-        texts = [item["text_data"] for item in batch]
+        images  = [item["image"] for item in batch]
+        texts   = [item["text_data"] for item in batch]
         answers = [item["answer"] for item in batch]
 
         # Stack images
-        images = torch.stack(images)
+        images  = torch.stack(images)
 
         # Create inputs by concatenating special image tokens, question, and answer
         input_sequences = []
