@@ -5,20 +5,24 @@ class VQACollator(object):  # Visual Question Answering Collator
         self.tokenizer             = tokenizer
         self.max_length            = max_length
         self.mp_image_token_length = mp_image_token_length
-        self.image_token_str       = tokenizer.image_token
+        self.image_token_str       = tokenizer.image_token # 이미지가 입력됨을 알리는 특수토큰 문자열 (예: <image>)
     
-    def __call__(self, batch):
-        images  = [item["image"] for item in batch]
-        texts   = [item["text_data"] for item in batch]
-        answers = [item["answer"] for item in batch]
+    def __call__(self, batch): 
+        images  = [item["image"] for item in batch]     # batch 리스트에서 각 데이터의 이미지만 추출해서 리스트로 저장
+        texts   = [item["text_data"] for item in batch] # 각 데이터에서 질문/텍스트 부분만 리스트로 저장
+        answers = [item["answer"] for item in batch]    # 각 데이터에서 정답만 리스트로 저장
 
         # Stack images
-        images  = torch.stack(images)
+        images  = torch.stack(images) # 이미지 리스트를 (batch, C, H, W) 텐서로 합침
 
         # Create inputs by concatenating special image tokens, question, and answer
         input_sequences = []
-        for i in range(len(texts)):
+        for i in range(len(texts)): # batch 길이만큼 반복해서 각 아이템에 대해 시퀀스 생성
             # Construct the image token segment string
+            #  → (이미지 특수토큰 X개) + (질문) + (정답) 순으로 문자열을 만들어 input_sequences에 추가
+            #  → 예시:
+            #      mp_image_token_length=3이면, <image><image><image>
+            #      "<image><image><image>...어떤 동물입니까?고양이"
             input_sequences.append(f"{self.image_token_str * self.mp_image_token_length}{texts[i]}{answers[i]}")
 
         encoded_full_sequences = self.tokenizer.batch_encode_plus(
