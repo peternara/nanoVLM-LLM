@@ -25,6 +25,27 @@ class VQACollator(object):  # Visual Question Answering Collator
             #      "<image><image><image>...어떤 동물입니까?고양이"
             input_sequences.append(f"{self.image_token_str * self.mp_image_token_length}{texts[i]}{answers[i]}")
 
+        # 예) input_sequences = [
+        #                        "<image><image>What is this animal?cat",
+        #                        "<image><image>What is the color?red"
+        #                       ]
+        # 이라면,
+        # 결과는 (실제 확인 필요)
+        #  {
+        #     'input_ids': tensor([
+        #            [0, 0, 102, 111, 119, 17, 13, 9, 247, 21, 453, 187],   # 예시 (batch=2, max_length=12)
+        #            [0, 0, 102, 111, 119, 17, 13, 9, 132, 54, 287, 321]
+        #        ]), # 각 문장이 토크나이저의 vocab에서 integer로 변환된 값. (패딩 포함) 
+        #     'attention_mask': tensor([
+        #            [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        #            [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        #        ])  # 실제 입력 토큰이면 1, 패딩이면 0.
+        #   }
+        #     아래는 사용하는 토크나이저 종류에 따라 추가될 수도 있는 필드들입니다.
+        #   →   'token_type_ids': tensor([[0, 0, ...], [0, 0, ...]]),  # (BERT류에서)
+        #   →   'special_tokens_mask': tensor([[0, 0, ...], [0, 0, ...]])
+        #   →   'overflowing_tokens': ...
+        #   →    등등
         encoded_full_sequences = self.tokenizer.batch_encode_plus(
             input_sequences,
             padding="max_length",
