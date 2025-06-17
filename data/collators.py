@@ -56,11 +56,15 @@ class VQACollator(object):  # Visual Question Answering Collator
         )
 
         # Create labels where only answer tokens are predicted
-        input_ids = encoded_full_sequences["input_ids"]
-        attention_mask = encoded_full_sequences["attention_mask"]
-        labels = input_ids.clone()
-        labels[:, :-1] = input_ids[:, 1:].clone() # Shift labels for causal LM
-        labels[:, -1] = -100 # Last token has no target
+        input_ids      = encoded_full_sequences["input_ids"]      # 입력 토큰 시퀀스 (batch, seq_len)
+        attention_mask = encoded_full_sequences["attention_mask"] # 패딩 마스크 (batch, seq_len)
+        
+        labels         = input_ids.clone()                        # (batch, seq_len), 정답 레이블 텐서
+        # labels를 오른쪽으로 한 칸씩 밀어서(shift) causal LM 학습에 맞게 조정
+        #    → 예: input_ids가 [A, B, C, D]면 labels는 [B, C, D, ?]가 됨
+        labels[:, :-1] = input_ids[:, 1:].clone()                 # Shift labels for causal LM, # 각 위치의 정답을 '다음 토큰'으로 설정
+        # # 마지막 토큰 위치는 정답이 없으므로 -100으로 마스킹(loss 계산에서 제외)
+        labels[:, -1]  = -100                                     # Last token has no target, # CrossEntropyLoss에서 ignore_index=-100 사용
 
         # Determine original lengths before padding/truncation to handle truncation cases
         original_lengths = [len(self.tokenizer.encode(seq)) for seq in input_sequences]
