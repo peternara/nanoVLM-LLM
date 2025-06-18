@@ -63,7 +63,7 @@ class VQACollator(object):  # Visual Question Answering Collator
         #--------------------------------------------------------------------------------------------------------------------
         # Label (GT) 생성
         #     → labels 텐서: (batch, max_length) shape
-         #         → 프롬프트 영역은 Answer가 아니기때문에 -100은 loss 무시(계산 안 함) < 이게 사실상 목표
+        #         → 프롬프트 영역은 Answer가 아니기때문에 -100은 loss 무시(계산 안 함) < 이게 사실상 목표
         #         → 정답 토큰 자리만 정수로 남겨서 loss에 포함
         #--------------------------------------------------------------------------------------------------------------------
         labels         = input_ids.clone()                        # (batch, seq_len), 정답 레이블 텐서
@@ -135,7 +135,7 @@ class VQACollator(object):  # Visual Question Answering Collator
             # i) labels 텐서: (batch, max_length) shape
             #     → 각 자리별로 -100은 loss 무시(계산 안 함)
             #     → 정답 토큰 자리만 정수로 남겨서 loss에 포함
-            # ii) 프롬프트란? = 맨앞쪽에 있는 패딩(존재한다면)+이미지 토큰 + 질문(텍스트) = (정답 토큰 앞에 있는 모든 것)
+            # ii) 프롬프트란? = 맨앞쪽에 있는 패딩(존재한다면) + 이미지 토큰 + 질문(텍스트) = 정답 토큰 앞에 있는 모든 것을 프롬프트 > 이를 -100으로 처리
             # iii) 즉, 프롬프트 영역을 모두 -100으로 처리한다는 의미 = labels[i, :mask_until_idx] = -100
             mask_until_idx             = first_token_pos + total_prompt_length - 1 
             labels[i, :mask_until_idx] = -100 # [0 ~ (first_token_pos + total_prompt_length - 1)]까지는 모두 -100으로 마스킹 (정답 부분만 loss 계산)
