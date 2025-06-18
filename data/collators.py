@@ -59,7 +59,13 @@ class VQACollator(object):  # Visual Question Answering Collator
         # Create labels where only answer tokens are predicted
         input_ids      = encoded_full_sequences["input_ids"]      # 입력 토큰 시퀀스 (batch, seq_len)
         attention_mask = encoded_full_sequences["attention_mask"] # 패딩 마스크 (batch, seq_len)
-        
+
+        #--------------------------------------------------------------------------------------------------------------------
+        # Label (GT) 생성
+        #     → labels 텐서: (batch, max_length) shape
+         #         → 프롬프트 영역은 Answer가 아니기때문에 -100은 loss 무시(계산 안 함) < 이게 사실상 목표
+        #         → 정답 토큰 자리만 정수로 남겨서 loss에 포함
+        #--------------------------------------------------------------------------------------------------------------------
         labels         = input_ids.clone()                        # (batch, seq_len), 정답 레이블 텐서
         # labels를 오른쪽으로 한 칸씩 밀어서(shift) causal LM 학습에 맞게 조정
         #    → 예: input_ids가 [A, B, C, D]면 labels는 [B, C, D, ?]가 됨
@@ -74,7 +80,7 @@ class VQACollator(object):  # Visual Question Answering Collator
         #   → 예: [4,,,10, 15]
         original_lengths = [len(self.tokenizer.encode(seq)) for seq in input_sequences]
 
-        for i in range(len(batch)):
+        for i in range(len(batch)): # batch 길이만큼 반복해서 Label[i] 생성
             # Case 1: If sequence was truncated (original is longer than max_length)
             if original_lengths[i] > self.max_length:                
                 # max_length보다 긴 경우 전체를 무시(마스킹), 전체 라벨 시퀀스를 -100으로 만듦. # 즉, 전체를 -100, 즉 loss 계산에서 완전히 제외
