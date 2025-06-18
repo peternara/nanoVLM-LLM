@@ -116,7 +116,7 @@ class VisionLanguageModel(nn.Module):
         #         결과:
         #             tensor([[ 2,  3,  4],
         #                     [ 7,  8,  9]])
-        #           → batch_idx_fill 과  sequence_idx_fill 그렇게 구성된 이유는 다음과 같이 삽입하는 것이다. 다만, advanced indexing은 이를 좀더 효율적으로 한꺼번에 처리.
+        #           → batch_idx_fill 과  sequence_idx_fill 그렇게 구성된 이유는 다음과 같이 삽입하는 것이다. 다만, advanced indexing은 이를 좀더 효율적으로 한꺼번에(동시에) 처리.
         #               → T[0, 2] = sequence_idx_fill[0,2] 
         #               → T[0, 3] = sequence_idx_fill[0,3]
         #               → T[0, 4] = sequence_idx_fill[0,4]
