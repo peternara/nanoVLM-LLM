@@ -109,20 +109,20 @@ class VisionLanguageModel(nn.Module):
         # updated_token_embd[batch, 해당 시퀀스 위치] = image_embd
         #      → PyTorch의 advanced indexing 방식이라고 함.
         # i) 예) 위의 코드와 거의 동일한 심플한 다음 처럼 심플한 코드 : advanced indexing
-        #        T                 = torch.arange(12).reshape(2, 6)
-        #        batch_idx_fill    = torch.tensor([[0,0,0],[1,1,1]])
-        #        sequence_idx_fill = torch.tensor([[2,3,4],[1,2,3]])
+        #        updated_token_embd = torch.arange(12).reshape(2, 6)
+        #        batch_idx_fill     = torch.tensor([[0,0,0],[1,1,1]])
+        #        sequence_idx_fill  = torch.tensor([[2,3,4],[1,2,3]])
         #        print(T[batch_idx_fill, sequence_idx_fill])
         #         결과:
         #             tensor([[ 2,  3,  4],
         #                     [ 7,  8,  9]])
         #           → batch_idx_fill 과  sequence_idx_fill 그렇게 구성된 이유는 다음과 같이 삽입하는 것이다. 다만, advanced indexing은 이를 좀더 효율적으로 한꺼번에(동시에) 처리.
-        #               → T[0, 2] = sequence_idx_fill[0,2] 
-        #               → T[0, 3] = sequence_idx_fill[0,3]
-        #               → T[0, 4] = sequence_idx_fill[0,4]
-        #               → T[1, 1] = sequence_idx_fill[1,1]
-        #               → T[1, 2] = sequence_idx_fill[1,2]
-        #               → T[1, 3] = sequence_idx_fill[1,3]
+        #               → updated_token_embd[0, 2] = sequence_idx_fill[0,2] 
+        #               → updated_token_embd[0, 3] = sequence_idx_fill[0,3]
+        #               → updated_token_embd[0, 4] = sequence_idx_fill[0,4]
+        #               → updated_token_embd[1, 1] = sequence_idx_fill[1,1]
+        #               → updated_token_embd[1, 2] = sequence_idx_fill[1,2]
+        #               → updated_token_embd[1, 3] = sequence_idx_fill[1,3]
         # advanced indexing을 사용해서 한 번에 교체 (broadcasting)
         updated_token_embd[batch_idx_fill, sequence_idx_fill] = image_embd.to(updated_token_embd.dtype)
         
