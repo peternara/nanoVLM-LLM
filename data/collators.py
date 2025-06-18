@@ -97,6 +97,8 @@ class VQACollator(object):  # Visual Question Answering Collator
             # attention_mask[i] = [0, 0,   1, 1, 1, 1, 1,   0, 0, 0]
             #                      ↑  ↑    ↑  ↑  ↑  ↑  ↑
             #                       패딩      실제 입력         패딩
+            #    → 앞에 패딩(2개, [0, 0,,,])가 있는 이유 : padding_side="left" 옵션
+            # HuggingFace 토크나이저 등에서 **padding="max_length"**와 **padding_side="left"**를 동시
             first_token_pos = attention_mask[i].nonzero(as_tuple=True)[0][0].item() # 실제 입력(패딩이 아닌) 첫 토큰의 인덱스 위치를 찾음
             
             # The total length of the "prompt" part (special image tokens + question)
