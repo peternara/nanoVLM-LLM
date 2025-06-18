@@ -57,6 +57,12 @@ class VisionLanguageModel(nn.Module):
         #      → 즉, torch.argmax(..., dim=1): 배치마다 True(1인)가 처음 등장하는 위치 반환 (즉, 첫 이미지 토큰 위치)
         # iiii) 참고 : text token 만들때 이미지 위치를 "<image>"라고 스트링 값을 넣음.
         #      → 그래서, tokenizer에 집어넣으면, 임의의 매칭되는 사전 index(정수형 숫자로) 매핑되고, 이 값이 self.tokenizer.image_token_id 임.
+        #      → 예로 이런식으로 미리 임의의 스트링을 사전에 정의 할수 있음
+        #            from transformers import AutoTokenizer
+        #            tokenizer = AutoTokenizer.from_pretrained("llama-2")
+        #            tokenizer.add_special_tokens({'additional_special_tokens': ['<image>']})
+        #            image_token_id = tokenizer.convert_tokens_to_ids('<image>')
+        #            print(image_token_id)  
         start_indices = torch.argmax((input_ids == self.tokenizer.image_token_id).int(), dim=1) # Shape: [batch_size]
 
         # Create batch indices for advanced indexing.
