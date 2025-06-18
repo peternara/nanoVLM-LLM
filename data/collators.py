@@ -23,6 +23,7 @@ class VQACollator(object):  # Visual Question Answering Collator
             #  → 예시:
             #      mp_image_token_length=3이면, <image><image><image>
             #      "<image><image><image>...어떤 동물입니까?고양이"
+            #  → self.image_token_str * self.mp_image_token_length : 이미지 토큰 개수 (mp_image_token_length) 만큼 이미지 토큰을 생성한다는 의미
             input_sequences.append(f"{self.image_token_str * self.mp_image_token_length}{texts[i]}{answers[i]}")
 
         # 예) input_sequences = [
@@ -94,13 +95,27 @@ class VQACollator(object):  # Visual Question Answering Collator
             if attention_mask[i].sum() == 0: # Should not happen if not truncated and not empty.
                 labels[i, :] = -100 # Defensive: if no actual tokens, ignore sample # 실제 토큰이 하나도 없는 경우(이상 상황), 전체를 무시 # 즉, 전체를 -100, 즉 loss 계산에서 완전히 제외
                 continue
-            # attention_mask[i] = [0, 0,   1, 1, 1, 1, 1,   0, 0, 0]
-            #                      ↑  ↑    ↑  ↑  ↑  ↑  ↑
-            #                       패딩      실제 입력         패딩
+
+            # 실제 입력(패딩이 아닌) 첫 토큰의 인덱스 위치를 찾음
+            # i) attention_mask[i] = [0, 0,   1, 1, 1, 1, 1,   0, 0, 0] # attention_mask[i]는 (max_length,) shape의 0 or 1 값을 가지는 텐서
+            #                      ↑  ↑    ↑  ↑  ↑  ↑  ↑    ↑  ↑  ↑
+            #                       패딩      실제 입력           패딩
             #    → 앞에 패딩(2개, [0, 0,,,])가 있는 이유 : padding_side="left" 옵션
-            # HuggingFace 토크나이저 등에서 **padding="max_length"**와 **padding_side="left"**를 동시
+            #        → HuggingFace 토크나이저 등에서 padding="max_length & padding_side="left" 를 동시에 적용하면, 
+            #        → 시퀀스의 길이가 max_length보다 짧으면, 앞부분(왼쪽)에 패딩 채워짐
+            #        → 위의 [,,0, 0, 0] 뒤쪽 패딩은 사실상 잘못된 예시
+            # ii) attention_mask[i].nonzero(as_tuple=True)[0][0].item()
+            #     → attention_mask[i].nonzero(as_tuple=True)  
+            #         → attention_mask[i]의 0이 아닌 위치 인덱스(nonzero())를 반환
+            #         → as_tuple=True : (텐서,)의 튜플로 반환
+            #         → 즉, (tensor([2, 3, 4, 5, 6]),)
+            #     → [0][0]
+            #     → 첫번째 [0]: 첫 번째 텐서, 즉 tensor([2, 3, 4, 5, 6])
+            #     → 두번째 [0]: 당연히 2 를 가져옴.
+            #     → item() : tensor의 타입을 버리고, 단지 int으로 변환 단지 int 형 2
             first_token_pos = attention_mask[i].nonzero(as_tuple=True)[0][0].item() # 실제 입력(패딩이 아닌) 첫 토큰의 인덱스 위치를 찾음
-            
+
+            # 프롬프트 전체 길이 = 이미지 토큰 개수 (self.mp_image_token_length) + 질문 토큰 개수 (question_part_length)
             # The total length of the "prompt" part (special image tokens + question)
             total_prompt_length = self.mp_image_token_length + question_part_length
             
@@ -108,8 +123,17 @@ class VQACollator(object):  # Visual Question Answering Collator
             # The prompt part starts at first_token_pos and has length total_prompt_length.
             # So, tokens from index 0 up to (first_token_pos + total_prompt_length - 1) should be masked.
             # The slicing labels[i, :N] masks indices 0 to N-1.
-            mask_until_idx = first_token_pos + total_prompt_length - 1
-            labels[i, :mask_until_idx] = -100
+            #
+            # 요점 : 정답(Answer) 토큰만 loss 계산에 사용하고, 프롬프트(맨앞쪽에 있는 패딩(존재한다면), 이미지 토큰, 질문)는 loss에서 제외 
+            #     → 목표:  패딩·프롬프트(이미지 토큰, 질문)은 -100으로 채워야함. 
+            # i) labels 텐서: (batch, max_length) shape
+            #     → 각 자리별로 -100은 loss 무시(계산 안 함)
+            #     → 정답 토큰 자리만 정수로 남겨서 loss에 포함
+            # ii) 프롬프트란? = 맨앞쪽에 있는 패딩(존재한다면)+이미지 토큰 + 질문(텍스트) = (정답 토큰 앞에 있는 모든 것)
+            # iii) 즉, 프롬프트 영역을 모두 -100으로 처리한다는 의미 = labels[i, :mask_until_idx] = -100
+            mask_until_idx             = first_token_pos + total_prompt_length - 1 
+            labels[i, :mask_until_idx] = -100 # [0 ~ (first_token_pos + total_prompt_length - 1)]까지는 모두 -100으로 마스킹 (정답 부분만 loss 계산)
+            
 
         return {
             "image": images,
