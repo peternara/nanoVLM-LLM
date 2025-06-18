@@ -164,10 +164,12 @@ class VisionLanguageModel(nn.Module):
         image_embd = self.MP(image_embd)      # [B, mp_image_token_length, D_lm]
 
         # 2. Embed initial text prompt tokens
+        #    → 임베딩 레이어 : 예) nn.Embedding(num_embeddings, embedding_dim)
+        #    → 입력 토큰 ID를 고정된 차원의 임베딩 벡터로 변환
         prompt_token_embeds = self.decoder.token_embedding(input_ids) # [B, T_prompt_text, D_lm]
 
-        # 3. Combine image and text embeddings
-        initial_combined_embeds = self._replace_img_tokens_with_embd(input_ids, prompt_token_embeds, image_embd)
+        # 3. Combine image and text embeddings 
+        initial_combined_embeds = self._replace_img_tokens_with_embd(input_ids, prompt_token_embeds, image_embd) # (batch, seq_len, embed_dim) 
 
         current_total_seq_len = initial_combined_embeds.size(1)
         batch_size = input_ids.size(0) # Or initial_combined_embeds.size(0)
