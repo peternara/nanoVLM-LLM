@@ -30,7 +30,7 @@ class VisionLanguageModel(nn.Module):
             self.vision_encoder = ViT(cfg)
             self.decoder        = LanguageModel(cfg)
         
-        self.MP            = ModalityProjector(cfg)
+        self.MP            = ModalityProjector(cfg) # pixel shuffle + linear 의 형태
         self.load_backbone = load_backbone
         self.tokenizer     = get_tokenizer(cfg.lm_tokenizer, cfg.vlm_extra_tokens)
 
