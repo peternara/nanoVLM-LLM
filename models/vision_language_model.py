@@ -34,15 +34,29 @@ class VisionLanguageModel(nn.Module):
         self.load_backbone = load_backbone
         self.tokenizer     = get_tokenizer(cfg.lm_tokenizer, cfg.vlm_extra_tokens)
 
+    # 텍스트 시퀀스의 "이미지 토큰" 자리에 실제 이미지 임베딩을 삽입하는 함수
     def _replace_img_tokens_with_embd(self, input_ids, token_embd, image_embd):
+        # input_ids(batch, seq_len):  각 배치의 토큰 시퀀스(정수 ID). = 각각 실제 이미지, 텍스트 관련 넣어야할 위치 존재
+        # token_embd(batch, seq_len, embed_dim): 각 토큰의 임베딩(통상 LLM 임베딩)
+        # image_embd(batch, image_token_len, embed_dim): 이미지의 임베딩 벡터(통상 이미지 Encoder에서 뽑은 벡터) 
+        
         # Vectorized replacement of image token placeholders.
         # This assumes that `input_ids` contains `self.cfg.mp_image_token_length` placeholders
         # for image tokens, and `image_embd` has the corresponding features.
-        updated_token_embd = token_embd.clone()
+        #
+        updated_token_embd = token_embd.clone() # token_embd 텐서를 복사해서 새 텐서를 만듦 (원본 보호)
 
         # Find the start index of image tokens for each item in the batch.
         # `torch.argmax` on the boolean mask (cast to int) returns the first index of `True` (value 1).
         # This relies on image_token_id being present and marking the start of the block.
+        # 
+        # 각 배치마다 이미지 토큰이 처음 나오는 인덱스(start index)를 찾음 
+        # i)  input_ids == self.tokenizer.image_token_id: (batch, seq_len) - 이미지 토큰 위치가 True
+        # ii) .int()로 True→1, False→0 변환 즉, 여기까지의 결과는 0과 1로만 구성되어 있음,
+        # iii) 그래서, torch.argmax를 이용하여 처음 나오는 1의 위치값을 구함
+        #      → 즉, torch.argmax(..., dim=1): 배치마다 True(1인)가 처음 등장하는 위치 반환 (즉, 첫 이미지 토큰 위치)
+        # iiii) 참고 : text token 만들때 이미지 위치를 "<image>"라고 스트링 값을 넣음.
+        #      → 그래서, tokenizer에 집어넣으면, 임의의 매칭되는 사전 index(정수형 숫자로) 매핑되고, 이 값이 self.tokenizer.image_token_id 임.
         start_indices = torch.argmax((input_ids == self.tokenizer.image_token_id).int(), dim=1) # Shape: [batch_size]
 
         # Create batch indices for advanced indexing.
@@ -67,12 +81,18 @@ class VisionLanguageModel(nn.Module):
         return updated_token_embd
 
     def forward(self, input_ids, image, attention_mask=None, targets=None):
+        # 1. visusal feature
         image_embd = self.vision_encoder(image)
+
+        # 주의 : pixel shuffle의 입력은 이미지가 아니라, VIT 마지막 PATCH 레이어를 의미.
+        #    → 의문) VIT 코드상으로보면 CLS를 제거하지 않는듯한데, (CLS를 제거해야지) HxW로 변환해야지 않나?
         # pixel shuffle + linear layer 
         image_embd = self.MP(image_embd) # [B, mp_image_token_length, D_lm]
 
+        # 2. text feature
         token_embd = self.decoder.token_embedding(input_ids) # [B, T_sequence, D_lm]
-        
+
+        # 3. embedding tokens = image token + text token : 텍스트 시퀀스의 "이미지 토큰" 자리에 실제 이미지 임베딩을 삽입하는 함수 
         updated_token_embd = self._replace_img_tokens_with_embd(input_ids, token_embd, image_embd)
 
         # The updated_token_embd is now the token_embd with image parts replaced.
