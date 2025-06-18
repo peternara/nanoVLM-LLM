@@ -4,12 +4,12 @@ import torch.nn as nn
 class ModalityProjector(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.cfg = cfg
-        self.input_dim = cfg.vit_hidden_dim * (cfg.mp_pixel_shuffle_factor**2)
-        self.output_dim = cfg.lm_hidden_dim
+        self.cfg          = cfg
+        self.input_dim    = cfg.vit_hidden_dim * (cfg.mp_pixel_shuffle_factor**2)
+        self.output_dim   = cfg.lm_hidden_dim
         self.scale_factor = cfg.mp_pixel_shuffle_factor
-
-        self.proj = nn.Linear(self.input_dim, self.output_dim, bias=False)
+        
+        self.proj         = nn.Linear(self.input_dim, self.output_dim, bias=False)
         
         self.apply(self._init_weights)
 
@@ -20,6 +20,7 @@ class ModalityProjector(nn.Module):
                 nn.init.zeros_(module.bias)
 
     # https://github.com/huggingface/smollm/blob/main/vision/m4/models/vllama3/modeling_vllama3.py#L1281
+    # 간단 알고리즘 - https://huggingface.co/blog/nanovlm 안의 그림 참조 
     def pixel_shuffle(self, x):
         bsz, seq, embed_dim = x.size()                 # x의 shape을 (batch_size, seq_len, embed_dim)으로 받음 # 입력 DIMENSION
         seq_root            = int(seq**0.5)            # seq_len의 제곱근을 구함 (이미지의 height/width로 사용)
