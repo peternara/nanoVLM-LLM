@@ -269,11 +269,14 @@ def train(train_cfg, vlm_cfg):
         optimizer.zero_grad()
 
         for i, batch in enumerate(train_loader):
-            is_update_step = (i + 1) % train_cfg.gradient_accumulation_steps == 0 or i + 1 == len(train_loader)
+            is_update_step   = (i + 1) % train_cfg.gradient_accumulation_steps == 0 or i + 1 == len(train_loader)
             batch_start_time = time.time()
-            images = batch["image"].to(device)
-            input_ids = batch["input_ids"].to(device)
-            labels = batch["labels"].to(device)
+
+            # 입력값
+            # https://github.com/peternara/nanoVLM-LLM/blob/main/data/collators.py#L144 참고
+            images         = batch["image"].to(device)
+            input_ids      = batch["input_ids"].to(device)
+            labels         = batch["labels"].to(device)
             attention_mask = batch["attention_mask"].to(device)
 
             # When using DDP with gradient accumulation,
