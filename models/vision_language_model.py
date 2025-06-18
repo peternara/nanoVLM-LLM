@@ -68,6 +68,7 @@ class VisionLanguageModel(nn.Module):
 
     def forward(self, input_ids, image, attention_mask=None, targets=None):
         image_embd = self.vision_encoder(image)
+        # pixel shuffle + linear layer 
         image_embd = self.MP(image_embd) # [B, mp_image_token_length, D_lm]
 
         token_embd = self.decoder.token_embedding(input_ids) # [B, T_sequence, D_lm]
