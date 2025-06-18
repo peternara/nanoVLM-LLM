@@ -106,10 +106,10 @@ class VQACollator(object):  # Visual Question Answering Collator
             # i) attention_mask[i] = [0, 0,   1, 1, 1, 1, 1,   0, 0, 0] # attention_mask[i]는 (max_length,) shape의 0 or 1 값을 가지는 텐서
             #                      ↑  ↑    ↑  ↑  ↑  ↑  ↑    ↑  ↑  ↑
             #                       패딩      실제 입력           패딩
-            #    → 앞에 패딩(2개, [0, 0,,,])가 있는 이유 : padding_side="left" 옵션
-            #        → HuggingFace 토크나이저 등에서 padding="max_length & padding_side="left" 를 동시에 적용하면, 
-            #        → 시퀀스의 길이가 max_length보다 짧으면, 앞부분(왼쪽)에 패딩 채워짐
-            #        → 위의 [,,0, 0, 0] 뒤쪽 패딩은 사실상 잘못된 예시
+            #     → 앞에 패딩(2개, [0, 0,,,])가 있는 이유 : padding_side="left" 옵션
+            #         → HuggingFace 토크나이저 등에서 padding="max_length & padding_side="left" 를 동시에 적용하면, 
+            #         → 시퀀스의 길이가 max_length보다 짧으면, 앞부분(왼쪽)에 패딩 채워짐
+            #         → 위의 [,,0, 0, 0] 뒤쪽 패딩은 사실상 잘못된 예시
             # ii) attention_mask[i].nonzero(as_tuple=True)[0][0].item()
             #     → attention_mask[i].nonzero(as_tuple=True)  
             #         → attention_mask[i]의 0이 아닌 위치 인덱스(nonzero())를 반환
