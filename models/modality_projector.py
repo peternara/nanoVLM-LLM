@@ -44,6 +44,7 @@ class ModalityProjector(nn.Module):
         
         # scale_factor^2 만큼 embed_dim을 늘려서,
         #    → (batch_size, h_out * w_out, embed_dim * scale_factor^2)로 reshape # 최종 DIMENSION
+        #    → h_out * w_out은 실제 image token length를 의미
         x = x.reshape(bsz, h_out * w_out, embed_dim * self.scale_factor**2)
         
         return x
