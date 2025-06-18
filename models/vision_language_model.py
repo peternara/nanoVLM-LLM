@@ -126,7 +126,7 @@ class VisionLanguageModel(nn.Module):
         # advanced indexing을 사용해서 한 번에 교체 (broadcasting)
         updated_token_embd[batch_idx_fill, sequence_idx_fill] = image_embd.to(updated_token_embd.dtype)
         
-        return updated_token_embd
+        return updated_token_embd # (batch, seq_len, embed_dim) 
 
     def forward(self, input_ids, image, attention_mask=None, targets=None):
         # 1. visusal feature
