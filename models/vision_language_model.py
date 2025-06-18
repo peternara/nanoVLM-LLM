@@ -25,13 +25,14 @@ class VisionLanguageModel(nn.Module):
         if load_backbone:
             print("Loading from backbone weights")
             self.vision_encoder = ViT.from_pretrained(cfg)
-            self.decoder = LanguageModel.from_pretrained(cfg)
+            self.decoder        = LanguageModel.from_pretrained(cfg)
         else:
             self.vision_encoder = ViT(cfg)
-            self.decoder = LanguageModel(cfg)
-        self.MP = ModalityProjector(cfg)
+            self.decoder        = LanguageModel(cfg)
+        
+        self.MP            = ModalityProjector(cfg)
         self.load_backbone = load_backbone
-        self.tokenizer = get_tokenizer(cfg.lm_tokenizer, cfg.vlm_extra_tokens)
+        self.tokenizer     = get_tokenizer(cfg.lm_tokenizer, cfg.vlm_extra_tokens)
 
     def _replace_img_tokens_with_embd(self, input_ids, token_embd, image_embd):
         # Vectorized replacement of image token placeholders.
