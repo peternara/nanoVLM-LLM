@@ -62,16 +62,30 @@ class VisionLanguageModel(nn.Module):
         #            tokenizer = AutoTokenizer.from_pretrained("llama-2")
         #            tokenizer.add_special_tokens({'additional_special_tokens': ['<image>']})
         #            image_token_id = tokenizer.convert_tokens_to_ids('<image>')
-        #            print(image_token_id)  
+        #            print(image_token_id) 
+        # V) 예) 
+        #      → input_ids = [[5, 5, 999, 999, 999, 7],     # 이미지 토큰(999)이 2~4 위치
+        #                     [8, 999, 999, 999, 4, 3]]     # 이미지 토큰(999)이 1~3 위치  
+        #      → start_indices = [2,1]
         start_indices = torch.argmax((input_ids == self.tokenizer.image_token_id).int(), dim=1) # Shape: [batch_size]
 
         # Create batch indices for advanced indexing.
         # This tensor will be like [[0,0,..0], [1,1,..1], ..., [B-1,B-1,..B-1]]
         # where each inner list has length `image_token_len`.
+        #
+        # [0,0,...], [1,1,...], ..., [B-1,B-1,...] 형태로 생성 - 각 행의 길이는 이미지 토큰 길이
+        #  i) 예) 위의 예(input_ids, start_indices)  이어서,  
+        #      → batch_idx_fill = [[0, 0, 0],
+        #                          [1, 1, 1]] 의 생성 하다는 의미 
         batch_idx_fill = torch.arange(input_ids.size(0), device=input_ids.device).unsqueeze(1).expand(-1, self.cfg.mp_image_token_length) # Shape: [batch_size, image_token_len]
 
         # Create sequence indices for replacement.
         # `seq_offsets` will be [0, 1, ..., image_token_len-1]
+        # 
+        # 이미지 토큰 길이만큼의 시퀀스 오프셋 생성 (0, 1, ..., image_token_len-1)
+        # i) 0부터 시작해서 self.cfg.mp_image_token_length 보다 작은 시퀀스를 만든다.
+        # ii) 예)
+        #      → mp_image_token_length = 3 이면, seq_offsets = [[0,1,2]]
         seq_offsets = torch.arange(self.cfg.mp_image_token_length, device=input_ids.device).unsqueeze(0) # Shape: [1, image_token_len]
 
         # `start_indices.unsqueeze(1)` results in shape [batch_size, 1].
