@@ -91,11 +91,23 @@ class VisionLanguageModel(nn.Module):
         # `start_indices.unsqueeze(1)` results in shape [batch_size, 1].
         # Broadcasting with `seq_offsets` gives, for each batch item `b`:
         # [start_indices[b], start_indices[b]+1, ..., start_indices[b]+image_token_len-1]
+        # 
+        # i) sequence_idx_fill의 목표 는 실제 이미지 토큰과 관련된 input_ids의 index(위치) 값 
+        #      → 이미지 토큰 시작 위치에 offset을 더해서, 실제로 대체할 시퀀스 위치 계산
+        #      → 즉, 시작 위치 3 이고 image_token_len=3이면 [3,4,5] )(equence_idx_fill)가 됨
+        # ii) 예) 
+        #      → start_indices.unsqueeze(1) : start_indices = [2,1] > [[2], [1]]
+        #      → [[2], [1]] + [[0, 1, 2]] => [[2+0, 2+1, 2+2], [1+0, 1+1, 1+2]] => [[2, 3, 4], [1, 2, 3]]
+        # 즉, sequence_idx_fill의 목표 는 실제 이미지 토큰과 관련된 input_ids의 index(위치) 값이다.  
         sequence_idx_fill = start_indices.unsqueeze(1) + seq_offsets # Shape: [batch_size, image_token_len]
 
         # Perform the replacement using advanced indexing.
         # `updated_token_embd[batch_idx_fill, sequence_idx_fill]` selects slices of shape [batch_size, image_token_len, D_lm]
         # `image_embd` also has shape [batch_size, image_token_len, D_lm] (or [B, mp_image_token_length, D_lm])
+        # 
+        # 실제 교체!
+        # updated_token_embd[batch, 해당 시퀀스 위치] = image_embd
+        # advanced indexing을 사용해서 한 번에 교체 (broadcasting)
         updated_token_embd[batch_idx_fill, sequence_idx_fill] = image_embd.to(updated_token_embd.dtype)
         
         return updated_token_embd
