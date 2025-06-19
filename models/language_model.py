@@ -398,6 +398,8 @@ class LanguageModelGroupedQueryAttention(nn.Module):
         v_curr = self.v_proj(x).view(B, T_curr, self.n_kv_heads, self.head_dim).transpose(1, 2) # (B, n_kv_heads, T_curr, head_dim)
 
         # Apply rotary embeddings to the current q and k
+        #
+        # RoPE를 Q, K에 실제 적용
         q, k_rotated = apply_rotary_pos_embd(q_curr, k_curr, cos, sin)
 
         # Check if we can use cached keys and values
