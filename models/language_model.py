@@ -94,7 +94,8 @@ class RotaryEmbedding(nn.Module):
         #                → (x₀, x₁), (x₂, x₃), (x₄, x₅) … 이렇게 두 개씩 짝을 지어 한 쌍이 한 ‘복소수 좌표’ 역할
         #                    → 짝수 > Real      > 0번째, 2번째, 4번째, ... → 각 쌍의 실수부
         #                    → 홀수 > Imaginary > 1번째, 3번째, 5번째, ... → 각 쌍의 허수부
-        #                → 주파수(frequency)는 짝수 차원만큼 필요
+        #                → 즉, 주파수(frequency)는 두개의 짝수 차원(예:(x₀, x₁)) 만큼 필요 (두개가 필요하다는 의미임, 짝수만 필요하다는게 아님)
+        #                → 실제로 sin/cos을 곱해서, 짝수 차원에는 cos, 그 다음(짝수+1) 차원에는 sin 이렇게 interleave(교차)하게 만듦.         
         #     → d: 한 헤드의 차원수 (self.dim)        
         #     → base: 주로 10000, 100000 등
         #     → ex 결과: d=8, dim=10000 이면 tensor([1, 4.6416, 2.1544, 0.1]) 
@@ -103,6 +104,7 @@ class RotaryEmbedding(nn.Module):
         #         → 4: 1/(10000^(4/8)) = 0.21544
         #         → 6: 1/(10000^(6/8)) = 0.1
         # V) 이걸 어떻게 적용? → RoPE에서는 각 토큰 위치(pos)와 이 inv_freq(주파수)를 곱해 
+        #     → inv_freq은 각 임베딩 차원이 변하는 “속도”를 조절하는 값
         #     → angle = pos×freq_i
         #     → 이 각도로 Q/K 벡터를 회전(sin/cos)해서 포지션 정보를 주입
         inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2).float() / self.dim))
@@ -118,19 +120,37 @@ class RotaryEmbedding(nn.Module):
 
         Args:
             position_ids (torch.Tensor): Tensor of shape (batch_size, seq_len) containing position indices.
+                                       : (batch, seq_len) - 각 토큰의 위치 인덱스 (0~N)
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]: Tuple of two tensors (cos, sin), each of shape
-                                  (batch_size, seq_len, dim), representing rotary embeddings.
+            Tuple[torch.Tensor, torch.Tensor]: Tuple of two tensors (cos, sin), each of shape > (batch_size, seq_len, dim), representing rotary embeddings.
+                                             : cos, sin > 각 (batch, seq_len, dim) - RoPE에서 사용할 cos, sin 패턴
         """
 
         batch_size, seq_len = position_ids.shape
+        
         # Dynamic scaling for longer sequences
         # Divide the angle frequency to fit more rotation into the embedding space.
+        #
+        # RoPE의 범위를 넘어서는 긴 시퀀스에 대해서 동적으로 scaling
+        #     → RoPE가 시퀀스 길이가 “학습/설계시의 최대 길이”보다 더 길 때 회전 주파수(frequency)를 "스케일링"해서, 포지션 정보를 뭉개지지 않게 보존하는 트릭
+        #     → position_ids: (batch, seq_len) tensor, 각 토큰의 position(0, 1, 2, ...) 
+        #     → max_seq: 입력받은 전체 배치 중 가장 큰 position + 1 
+        #     → 예) position_ids.max()가 511이면, max_seq=512 즉, 현재 들어온 데이터에서 "가장 긴 시퀀스 길이"를 의미
+        #     → 그런데, 왜 이러한 구성을 하는가?
+        #         → RoPE의 한계 RoPE의 주파수(inv_freq)는 처음 모델을 설계할 때 최대 시퀀스 길이(lm_max_position_embeddings(ex: 2048, 4096, 8192 등))에 제약되어 생성.
+        #         → 그런데, 실제 inference/training에서 더 긴 시퀀스(예: 4096 → 6000)를 넣으면,
+        #         → 포지션 각도(θ=pos×freq)가 너무 커져서 sin/cos이 너무 빨리 주기적으로 반복 
+        #         → "포지션 구분이 안 되고 겹침(알리아싱/포지션 정보 소실)"
+        #     → 그래서, 들어온 시퀀스가 기존 한계보다 길면, 주파수(inv_freq)를 '줄여서' 더 넓은 구간(더 느린 속도)로 펼침
         max_seq = position_ids.max() + 1
-        if max_seq > self.original_max_seq_len:
-            scale = max_seq / self.original_max_seq_len
-            inv_freq = self.inv_freq / scale
+        if max_seq > self.original_max_seq_len:          # 예) 6000 > 4096  
+            scale = max_seq / self.original_max_seq_len  #    scale = 6000 / 4096 ≈ 1.46
+            inv_freq = self.inv_freq / scale             #    기존 주파수(inv_freq)를 1.46배로 "느리게" 만들어줌 
+                                                         # 즉, position_ids × (inv_freq/scale)
+                                                         #    → pos가 6000이 들어와도
+                                                         #    → max_pos 4096에 맞는 각도 범위에 압축
+                                                         # 결과적으로, 포지션 정보가 “너무 빠르게 반복되지 않도록” 각도를 좁힘
         else:
             inv_freq = self.inv_freq
             
@@ -139,12 +159,52 @@ class RotaryEmbedding(nn.Module):
         flat_position_ids = position_ids.reshape(-1).float()
         
         # Element-wise outer product: [seq_len] x [dim/2] => [seq_len, dim/2]
+        #
+        # 각 position * 각 freq → 각 위치별 각도(theta) [seq_len x dim/2]
+        #     → 단순히, cos(𝜃), sin(𝜃) 에 들어가는 𝜃 값을 의미
+        #     → 왜 이 값(각 position * 각 freq)이 𝜃 값인가?
+        #         → torch.sin, torch.cos 함수는 입력값을 각도(라디안)로 해석
+        #         → cos(𝜃), sin(𝜃)에 넣은 값은 주기적(파동) 패턴이 생성 
+        #         → RoPE에서는 이 값을 써서 Q/K 벡터를 복소수 평면에서 “회전”시키는 효과를 냄
+        #         → 즉, position별로 벡터의 방향이 조금씩 달라짐
+        #
+        #         → RoPE(또는 sinusoidal positional embedding)의 본질은 "토큰의 위치 정보"를 여러 “파동(진동, 주파수)”로 encode하는 것.
+        #             → position(포지션): 해당 토큰이 시퀀스에서 몇 번째인가?
+        #             → inv_freq(역주파수): "각 임베딩 차원"이 변하는 “속도”를 조절하는 값
+        #             → 두 값을 곱하면,
+        #                → “0번째 포지션에서는 0 각도”, 
+        #                → “1번째 포지션에서는 inv_freq_i 만큼 증가”, 
+        #                → “2번째 포지션에서는 2×inv_freq_i 만큼 증가”
+        #                → … 
+        #                → 즉, position이 커질수록 각도(라디안)가 커져서 벡터가 점점 더 많이 ‘회전’하게 됨
+        #          → 그럼, 여기서의 각도의 의미는?
+        #              → 0에서 시작해서, 주파수(inv_freq_i)만큼 매 스텝 증가하는 값  
+        #              → 예)
+        #                  → position이 0, 1, 2, 3, ... 
+        #                  → 각 임베딩 차원별로 > θ = 0, 1xinv_freq_i​, 2xinv_freq_i​, 3xinv_freq_i​,... # 0에서 시작해서, 주파수(inv_freq_i)만큼 매 스텝 증가하는 값  
+        #                  → 이 값(아래 freqs)은 sin/cos의 입력(=라디안 각도)임 
         freqs = flat_position_ids.unsqueeze(-1) * inv_freq.unsqueeze(0)
         
         # Reshape to include batch dimension
         freqs = freqs.reshape(batch_size, seq_len, -1)
         
         # Now create interleaved pattern
+        #
+        # i) 차원별로 θ(각도)를 “짝수, 홀수 차원 쌍”으로 interleave(교차)하는 핵심 단계
+        #     → freqs의 shape: (batch, seq_len, dim/2)
+        #     → 여기서 각 원소는 각 위치별, 차원별 θ(각도)임 (위의 설명 참조)
+        #         → freqs[0, 0, :] = [0, 0, ...]
+        #         → freqs[0, 1, :] = [1×inv_freq_0, 1×inv_freq_1, ...]
+        #     → RoPE의 핵심은 
+        #         → 임베딩의 짝수 차원(0,2,4,...) > cos(θ) 
+        #         → 임베딩의 홀수 차원(1,3,5,...) > sin(θ) 
+        #         → 실제 임베딩에서 (cos(θ₀), sin(θ₀), cos(θ₁), sin(θ₁), ...)처럼 [짝수, 홀수] 쌍으로 θ를 interleave(교차)하여 생성.
+        #     → torch.cat([freqs, freqs], dim=-1) 이렇게 하면?
+        #         → 예) 
+        #             → freqs = [θ₀, θ₁, θ₂, θ₃] 
+        #             → torch.cat([freqs, freqs], dim=-1) 적용
+        #             → [θ₀, θ₁, θ₂, θ₃, θ₀, θ₁, θ₂, θ₃]
+        # ii) freqs(각도)를 똑같이 한 번 더 붙여서 차원을 2배로 늘리는 것
         emb = torch.cat([freqs, freqs], dim=-1)
         
         # Compute cos and sin
