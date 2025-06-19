@@ -598,6 +598,12 @@ class LanguageModel(nn.Module):
         
         # Create position_ids for the current sequence based on start_pos
         current_position_ids = torch.arange(start_pos, start_pos + T_curr, device=x.device).unsqueeze(0).expand(B, -1)
+
+        # RoPE (Rotary Positional Embedding)
+        #    → RoPE는 Llama, GPT-NEOX 등 최신 트랜스포머에서 기본 positional embedding 사용
+        #    → 입력 시퀀스(토큰)의 각 위치에 대해, 학습이 필요없는(학습파라메터가 필요없음) 사인/코사인 함수를 기반으로 하는 position embedding을 만들어 Q/K 벡터에 position 정보를 더하는 데 사용
+        #    → 입력 시퀀스의 위치(position)에 따라 각 차원의 임베딩을 사인/코사인 곡선으로 회전(rotary)시켜, 트랜스포머의 Q/K에 위치 정보를 삽입. 
+        #    → 더 긴 시퀀스에서도 position 정보가 잘 보존
         cos, sin = self.rotary_embd(current_position_ids) # Get rotary position embeddings for current tokens
 
         # Initialize new KV cache if none provided
