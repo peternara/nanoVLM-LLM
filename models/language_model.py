@@ -40,6 +40,17 @@ class RMSNorm(nn.Module):
 
 # Multiple derivates of Rotary Embeddings by now, this is a basic one with linear scaling to context length
 # e.g. https://github.com/huggingface/smollm/blob/main/vision/m4/models/vllama3/modeling_vllama3.py#L190
+#
+# RoPE (Rotary Positional Embedding)
+#    → RoPE는 Llama, GPT-NEOX 등 최신 트랜스포머에서 기본 positional embedding 사용
+#    → 입력 시퀀스(토큰)의 각 위치에 대해, 학습이 필요없는(학습파라메터가 필요없음) 사인/코사인 함수를 기반으로 하는 position embedding을 만들어 Q/K 벡터에 position 정보를 더하는 데 사용
+#    → 입력 시퀀스의 위치(position)에 따라 각 차원의 임베딩을 사인/코사인 곡선으로 회전(rotary)시켜, 트랜스포머의 Q/K에 위치 정보를 삽입. 
+#    → 더 긴 시퀀스에서도 position 정보가 잘 보존
+#    상세)
+#    → 각 토큰 위치와 차원별 주파수를 곱해, 
+#    → 각 위치에 대해 sin/cos 곡선을 생성
+#    → 이 패턴으로 Q/K 임베딩을 "회전"하여,
+#    → 위치와 상대적 거리가 attention score에 자연스럽게 반영되도록 만듦   
 class RotaryEmbedding(nn.Module):
     """
         Compute Rotary Embedding to introduce positional dependency to input sequence without additional training parameters and 
@@ -58,15 +69,37 @@ class RotaryEmbedding(nn.Module):
         super().__init__()
         assert cfg.lm_hidden_dim % cfg.lm_n_heads == 0, "Hidden dimension must be divisible by number of heads"
         
-        self.dim = cfg.lm_hidden_dim // cfg.lm_n_heads # dim of each head
-        self.base = cfg.lm_re_base
-        self.max_seq_len = cfg.lm_max_position_embeddings
+        self.dim         = cfg.lm_hidden_dim // cfg.lm_n_heads # dim of each head, # 한 헤드의 임베딩 차원
+        self.base        = cfg.lm_re_base                      # RoPE에서 쓸 주파수 베이스 (default=10000)
+        self.max_seq_len = cfg.lm_max_position_embeddings      # RoPE가 지원하는 최대 길이
+        
         # Standard RoPE implementation - create frequencies for each dimension
         # freq_i = 1 / (base^(2i/dim)) where i is the dimension index
+        #
+        # i) RoPE의 주파수 텐서 준비: [0, 2, 4, ..., dim-2] (짝수 차원만 사용)
+        # ii) freq_i = 1/(base^(2i/dim))
+        # iii) 각 차원(dimension)마다 사용하는 회전 주파수(frequency)를 계산하는 부분
+        #     → RoPE는 각 차원별로 “회전(rotary)”시키는 각도의 속도(=주파수)가 다름
+        #     → 저차원(앞쪽 차원)은 천천히 변화,
+        #     → 고차원(뒤쪽 차원)은 빨리 변화
+        #     → 이렇게 하면 각 토큰의 위치를 여러 스케일로 encode 가능
+        # iiii) 아래 코드는 RoPE 주파수 공식 : freq_i = 1/base^(2i/d)
+        #     → i: 짝수 (0,2,,)
+        #     → d: 한 헤드의 차원수 (self.dim)
+        #     → base: 주로 10000, 100000 등
+        #     → ex 결과: d=8, dim=10000 이면 tensor([1, 4.6416, 2.1544, 0.1]) 
+        #         → 0: 1/1 = 1.0
+        #         → 2: 1/(10000^(2/8)) = 0.46416
+        #         → 4: 1/(10000^(4/8)) = 0.21544
+        #         → 6: 1/(10000^(6/8)) = 0.1
+        # V) 이걸 어떻게 적용? → RoPE에서는 각 토큰 위치(pos)와 이 inv_freq(주파수)를 곱해 
+        #     → angle = pos×freq_i
+        #     → 이 각도로 Q/K 벡터를 회전(sin/cos)해서 포지션 정보를 주입
         inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2).float() / self.dim))
+        
         self.register_buffer("inv_freq", inv_freq)
         self.original_max_seq_len = cfg.lm_max_position_embeddings
-        self.attention_scaling = cfg.lm_attn_scaling
+        self.attention_scaling    = cfg.lm_attn_scaling # (옵션) attention scaling (보통 1.0)
 
     @torch.no_grad()
     def forward(self, position_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
