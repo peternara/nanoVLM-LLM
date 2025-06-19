@@ -246,11 +246,29 @@ class RotaryEmbedding(nn.Module):
         
         return cos, sin
 
+#  “허수부”(i 파트) 계산을 벡터 연산으로 구현하기 위해서
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
     """
     Rotates the input by dividing the hidden dimension to two, then swapping and negating dimensions.
     """
+    # 임베딩의 마지막 차원(=head_dim)을 절반으로 쪼갬
+    #     → 예) x = [a, b, c, d] >  x1 = [a, b], x2 = [c, d]
     x1, x2 = x.chunk(2, dim=-1)
+    
+    # i) x2(뒤쪽 절반)를 음수로 바꿔서 앞에 붙임 > x1(앞쪽 절반)는 그대로 뒤에 붙임 
+    #     → 예) [a, b], [c, d] → [-c, -d, a, b]
+    # ii) why?
+    #     → 임베딩을 두 차원씩 쌍으로 보면,
+    #     → 하나를 "실수부", 하나를 "허수부"
+    #     → 즉, [a, b] → a + ib (복소수)
+    #         → [실수부] : a·cos(θ) - b·sin(θ)
+    #         → [허수부] : b·cos(θ) + a·sin(θ)
+    #             → 이를  [-b, a]에 sin(θ) 곱하면 [-b·sin(θ), a·sin(θ)] # "벡터" 곱으로 구현하기 위해!!
+    #             → 이는 (첫번째: 실수부의 -b·sin(θ), 두번째: 허수부의 a·sin(θ))
+    #     → 그래서, rotate_half를 이용하여, [x1, x2] → [-x2, x1]로 바꿔 붙임
+    #         → rotate_half([a, b]) > [-b, a]
+    #         → [a·cos(θ) - b·sin(θ), b·cos(θ) + a·sin(θ)]
+    # iii) 정리: rotate_half 함수에서 [-x2, x1]로 바꾸는 이유는 바로 복소수 곱의 “허수부”(i 파트) 계산을 벡터 연산으로 구현하기 위해서
     return torch.cat((-x2, x1), dim=-1)
 
 # Apply rotary position embeddings to queries and keys.
@@ -287,11 +305,22 @@ def apply_rotary_pos_embd(q: torch.Tensor, k: torch.Tensor, cos: torch.Tensor, s
 
     # We need to make sure cos and sin can be properly broadcast
     # to the shape of q and k by adding the heads dimension
+    #
+    # ROPE 계산 결과 = (cos, sin)
+    #   → unsqueeze하는 이유:
+    #       → q, k의 shape: [batch, num_heads, seq_len, head_dim]
+    #       → cos, sin의 2번째 차원(heads)에 1을 끼워 넣어 "브로드캐스팅"을 가능하게 함
     cos = cos.unsqueeze(unsqueeze_dim)  # [batch_size, 1, seq_len, head_dim]
     sin = sin.unsqueeze(unsqueeze_dim)  # [batch_size, 1, seq_len, head_dim]
     
     # Apply complex multiplication:
     # (q * cos) + (rotate_half(q) * sin)
+    # 
+    # 실제 RoPE 공식에 따라 Q/K 벡터에 곱함
+    #       → (q * cos) + (rotate_half(q) * sin)
+    #           → 실수부 (q * cos)
+    #           → 허수부 (rotate_half(q) * sin)
+    #               → rotate_half()의 역할 : 바로 복소수 곱의 “허수부”(i 파트) 계산을 벡터 연산으로 구현하기 위해서
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     
