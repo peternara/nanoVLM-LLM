@@ -399,7 +399,8 @@ class LanguageModelGroupedQueryAttention(nn.Module):
 
         # Apply rotary embeddings to the current q and k
         #
-        # RoPE를 Q, K에 실제 적용
+        # i) RoPE를 Q, K에 실제 적용
+        # ii) 왜 Q, K를 모두 RoPE를 적용했는데, 왜 K만 k_rotated 로 지었을까?
         q, k_rotated = apply_rotary_pos_embd(q_curr, k_curr, cos, sin)
 
         # Check if we can use cached keys and values
