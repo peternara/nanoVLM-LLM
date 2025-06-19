@@ -231,6 +231,10 @@ class RotaryEmbedding(nn.Module):
         emb = torch.cat([freqs, freqs], dim=-1)
         
         # Compute cos and sin
+        # 
+        # 최종적으로 cos, sin 값을 계산 - 나중에 선별 계산
+        #        → cos(emb): [cos(θ₀), cos(θ₁), cos(θ₂), cos(θ₃), cos(θ₀), cos(θ₁), cos(θ₂), cos(θ₃)]
+        #        → sin(emb): [sin(θ₀), sin(θ₁), sin(θ₂), sin(θ₃), sin(θ₀), sin(θ₁), sin(θ₂), sin(θ₃)]   
         cos = torch.cos(emb) * self.attention_scaling
         sin = torch.sin(emb) * self.attention_scaling
         
