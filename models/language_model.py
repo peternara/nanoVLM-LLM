@@ -408,6 +408,20 @@ class LanguageModelGroupedQueryAttention(nn.Module):
         if not is_prefill and block_kv_cache['key'] is not None:
             # Concatenate with cached K, V
             # k_rotated and v_curr are for the new token(s)
+            #
+            # i) 모든 K, V를 concat하여 저장
+            # ii) why? autoregressive 하게 하나씩 순서대로(왼→오) 생성하는 상황 < 이게 중요
+            #      → 이렇기 때문에, 예) 토큰 A, B, C, D이다고 가정하자.
+            #          →  D 토큰을 생성하려면?
+            #              → [A], [A,B], [A,B,C], [A,B,C,D] 순으로 모두 모델에 다시 넣고,K/Q/V를 매번 전체 새로 계산 < 매우 비효율적
+            #                  → 즉, 다시말해, D 생성시에는 A, B, C, D 모두의 K/V를 새로 모델로 구함
+            #                  → 이는 계산량 폭발(O(N^2))
+            #      → 그래서, KV 캐시 도입 (아래 코드)
+            #          → 각 토큰 생성마다 새로 생성된 K/V만 계산해서 캐시에 추가
+            #          → 이전까지 계산된 K/V는 메모리에 저장 (재활용) 
+            #          → 새로 들어온 Q(현재 토큰)는 딱 한 번만 계산 
+            #          → 어텐션에서는 캐시된 모든 K와 Q의 내적만 수행 (텐서 곱이므로 매우 빠름)
+            #      → 즉, 최종 목표는 새로운(현재) Q × (캐시된 모든 K(현재 K도 포함-아래 concat)) 의 내적만 계산
             k = block_kv_cache['key']
             v = block_kv_cache['value']
             k = torch.cat([k, k_rotated], dim=2)
