@@ -232,9 +232,15 @@ class RotaryEmbedding(nn.Module):
         
         # Compute cos and sin
         # 
-        # 최종적으로 cos, sin 값을 계산 - 나중에 선별 계산
+        # i) 최종적으로 cos, sin 값을 계산 - 나중에 선별 계산
         #        → cos(emb): [cos(θ₀), cos(θ₁), cos(θ₂), cos(θ₃), cos(θ₀), cos(θ₁), cos(θ₂), cos(θ₃)]
         #        → sin(emb): [sin(θ₀), sin(θ₁), sin(θ₂), sin(θ₃), sin(θ₀), sin(θ₁), sin(θ₂), sin(θ₃)]   
+        # ii) self.attention_scaling
+        #        → 로터리 임베딩의 cos/sin 값에 곱해주는 scaling factor(스케일링 계수)
+        #        → 수치적 안정성 및 학습 효율
+        #            → cos/sin 값의 스케일이 너무 작거나 클 경우 attention 값의 분포가 흔들려 학습이 불안정
+        #            → attention 에서 1/root(d)로 나누는 과정이 존재 (d = 임베딩 차원수) 
+        #            → RoPE를 적용한 후에도 전체 attention 스케일이 기존과 비슷하게 유지될 수 있도록 조정하기 위한 용도
         cos = torch.cos(emb) * self.attention_scaling
         sin = torch.sin(emb) * self.attention_scaling
         
