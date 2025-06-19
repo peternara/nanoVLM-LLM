@@ -487,8 +487,8 @@ class LanguageModelMLP(nn.Module):
 class LanguageModelBlock(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.mlp = LanguageModelMLP(cfg)
-        self.attn = LanguageModelGroupedQueryAttention(cfg)
+        self.mlp   = LanguageModelMLP(cfg)
+        self.attn  = LanguageModelGroupedQueryAttention(cfg)
         self.norm1 = RMSNorm(cfg) # Input Norm
         self.norm2 = RMSNorm(cfg) # Post Attention Norm
     
@@ -497,28 +497,27 @@ class LanguageModelBlock(nn.Module):
         Forward pass of the Transformer block.
 
         Args:
-            x (Tensor): Input tensor of shape (batch_size, seq_len, hidden_dim).
-            cos (Tensor): Cosine positional embeddings for rotary embedding, shape
-                matching sequence length and head dimension.
-            sin (Tensor): Sine positional embeddings for rotary embedding, same shape as cos.
+            x (Tensor)  : Input tensor of shape (batch_size, seq_len, hidden_dim).
+            cos (Tensor): Cosine positional embeddings for rotary embedding, shape matching sequence length and head dimension. # RoPE
+            sin (Tensor): Sine positional embeddings for rotary embedding, same shape as cos.                                   # RoPE
             attention_mask (Tensor, optional): Attention mask of shape (batch_size, total_kv_length),
-                with 1 indicating tokens to attend to and 0 for padding tokens.
-            block_kv_cache (dict, optional): Key-value cache dict for cached keys and values
-                during decoding. If None, no cache is used.
-
+                                                with 1 indicating tokens to attend to and 0 for padding tokens.
+            block_kv_cache (dict, optional)  : Key-value cache dict for cached keys and values
+                                                during decoding. If None, no cache is used.
         Returns:
             Tuple[Tensor, dict]: Output tensor after the block (same shape as input),
                 and the updated key-value cache dictionary.
         """
-        res = x
-        x = self.norm1(x)
+        
+        res               = x
+        x                 = self.norm1(x)
         x, block_kv_cache = self.attn(x, cos, sin, attention_mask, block_kv_cache)
-        x = res + x
+        x                 = res + x
 
-        res = x
-        x = self.norm2(x)
-        x = self.mlp(x)
-        x = res + x
+        res               = x
+        x                 = self.norm2(x)
+        x                 = self.mlp(x)
+        x                 = res + x
 
         return x, block_kv_cache
 
