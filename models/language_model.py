@@ -316,23 +316,23 @@ class LanguageModelGroupedQueryAttention(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
-        self.n_heads = cfg.lm_n_heads
+        self.n_heads    = cfg.lm_n_heads
         self.n_kv_heads = cfg.lm_n_kv_heads
-        self.embd_dim = cfg.lm_hidden_dim
-        self.dropout = cfg.lm_dropout
+        self.embd_dim   = cfg.lm_hidden_dim
+        self.dropout    = cfg.lm_dropout
 
         assert self.n_heads % self.n_kv_heads == 0, "n_heads must be divisible by n_kv_heads"
         assert self.embd_dim % self.n_heads == 0, "embd_dim must be divisible by num_heads"
 
-        self.n_kv_groups = self.n_heads // self.n_kv_heads
-        self.head_dim = self.embd_dim // self.n_heads
+        self.n_kv_groups   = self.n_heads // self.n_kv_heads
+        self.head_dim      = self.embd_dim // self.n_heads
 
-        self.q_proj = nn.Linear(self.embd_dim, self.embd_dim, bias=False)
-        self.k_proj = nn.Linear(self.embd_dim, self.head_dim * self.n_kv_heads, bias=False)
-        self.v_proj = nn.Linear(self.embd_dim, self.head_dim * self.n_kv_heads, bias=False)
-        self.out_proj = nn.Linear(self.embd_dim, self.embd_dim, bias=False)
+        self.q_proj        = nn.Linear(self.embd_dim, self.embd_dim, bias=False)
+        self.k_proj        = nn.Linear(self.embd_dim, self.head_dim * self.n_kv_heads, bias=False)
+        self.v_proj        = nn.Linear(self.embd_dim, self.head_dim * self.n_kv_heads, bias=False)
+        self.out_proj      = nn.Linear(self.embd_dim, self.embd_dim, bias=False)
 
-        self.attn_dropout = nn.Dropout(self.dropout)
+        self.attn_dropout  = nn.Dropout(self.dropout)
         self.resid_dropout = nn.Dropout(self.dropout)
 
         # Use scaled dot product attention if available
@@ -379,19 +379,19 @@ class LanguageModelGroupedQueryAttention(nn.Module):
             v = block_kv_cache['value']
             k = torch.cat([k, k_rotated], dim=2)
             v = torch.cat([v, v_curr], dim=2)
-            block_kv_cache['key'] = k
+            block_kv_cache['key']   = k
             block_kv_cache['value'] = v
         else:
             # No cache, this is the first pass (prefill)
-            k = k_rotated
-            v = v_curr
+            k              = k_rotated
+            v              = v_curr
             block_kv_cache = {'key': k, 'value': v}
 
         # Repeat K, V for Grouped Query Attention
         k_exp = k.repeat_interleave(self.n_kv_groups, dim=1) # (B, n_heads, T_kv, head_dim)
         v_exp = v.repeat_interleave(self.n_kv_groups, dim=1) # (B, n_heads, T_kv, head_dim)
         
-        T_kv = k_exp.size(2) # Total sequence length of keys/values
+        T_kv  = k_exp.size(2) # Total sequence length of keys/values
 
         # Prepare attention mask for SDPA or manual path
         # attention_mask is (B, T_kv_total_length), 1 for attend, 0 for pad
@@ -399,7 +399,7 @@ class LanguageModelGroupedQueryAttention(nn.Module):
         if attention_mask is not None:
             # The current `attention_mask` parameter is assumed to be `[B, total_sequence_length_kv]`
             # Let's make it `[B, 1, 1, T_kv]` for SDPA.
-            mask_for_keys = attention_mask[:, :T_kv] # Ensure mask matches key length [B, T_kv]
+            mask_for_keys      = attention_mask[:, :T_kv] # Ensure mask matches key length [B, T_kv]
             additive_attn_mask = (1.0 - mask_for_keys.unsqueeze(1).unsqueeze(2).float()) * torch.finfo(q.dtype).min
             # This additive_attn_mask shape is [B, 1, 1, T_kv]
 
@@ -415,10 +415,11 @@ class LanguageModelGroupedQueryAttention(nn.Module):
         else:
             # Manual attention implementation
             attn = torch.matmul(q, k_exp.transpose(2, 3)) / math.sqrt(self.head_dim) # (B, n_heads, T_curr, T_kv)
+            
             # During decode: no additional masking needed as [1, T_kv] is naturally causal
             if T_curr == T_kv and T_curr > 1:
                 causal_mask_val = torch.tril(torch.ones(T_curr, T_curr, device=x.device, dtype=torch.bool)).view(1, 1, T_curr, T_curr)
-                attn = attn.masked_fill(~causal_mask_val, float('-inf'))
+                attn            = attn.masked_fill(~causal_mask_val, float('-inf'))
 
             if additive_attn_mask is not None: # Additive padding mask
                 # additive_attn_mask is [B,1,1,T_kv], needs to be broadcast to [B, n_heads, T_curr, T_kv]
@@ -426,7 +427,7 @@ class LanguageModelGroupedQueryAttention(nn.Module):
 
             attn = F.softmax(attn, dim=-1)
             attn = self.attn_dropout(attn)
-            y = attn @ v_exp
+            y    = attn @ v_exp
             
         y = y.transpose(1, 2).contiguous().view(B, T_curr, C)
         y = self.out_proj(y)
