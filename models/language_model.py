@@ -94,7 +94,7 @@ class RotaryEmbedding(nn.Module):
         #                → (x₀, x₁), (x₂, x₃), (x₄, x₅) … 이렇게 두 개씩 짝을 지어 한 쌍이 한 ‘복소수 좌표’ 역할
         #                    → 짝수 > Real      > 0번째, 2번째, 4번째, ... → 각 쌍의 실수부
         #                    → 홀수 > Imaginary > 1번째, 3번째, 5번째, ... → 각 쌍의 허수부
-        #                → 즉, 주파수(frequency)는 두개의 짝수 차원(예:(x₀, x₁)) 만큼 필요 (두개가 필요하다는 의미임, 짝수만 필요하다는게 아님)
+        #                → 즉, 주파수(frequency)는 두개의 짝수 차원(예:(x₀, x₁)) 만큼 필요 (주의!! 두개가 필요하다는 의미임, 짝수만 필요하다는게 아님)
         #                → 실제로 sin/cos을 곱해서, 짝수 차원에는 cos, 그 다음(짝수+1) 차원에는 sin 이렇게 interleave(교차)하게 만듦.         
         #     → d: 한 헤드의 차원수 (self.dim)        
         #     → base: 주로 10000, 100000 등
@@ -111,7 +111,7 @@ class RotaryEmbedding(nn.Module):
         
         self.register_buffer("inv_freq", inv_freq)
         self.original_max_seq_len = cfg.lm_max_position_embeddings
-        self.attention_scaling    = cfg.lm_attn_scaling # (옵션) attention scaling (보통 1.0)
+        self.attention_scaling    = cfg.lm_attn_scaling             # (옵션) attention scaling (보통 1.0)
 
     @torch.no_grad()
     def forward(self, position_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -144,13 +144,13 @@ class RotaryEmbedding(nn.Module):
         #         → "포지션 구분이 안 되고 겹침(알리아싱/포지션 정보 소실)"
         #     → 그래서, 들어온 시퀀스가 기존 한계보다 길면, 주파수(inv_freq)를 '줄여서' 더 넓은 구간(더 느린 속도)로 펼침
         max_seq = position_ids.max() + 1
-        if max_seq > self.original_max_seq_len:          # 예) 6000 > 4096  
-            scale = max_seq / self.original_max_seq_len  #    scale = 6000 / 4096 ≈ 1.46
-            inv_freq = self.inv_freq / scale             #    기존 주파수(inv_freq)를 1.46배로 "느리게" 만들어줌 
-                                                         # 즉, position_ids × (inv_freq/scale)
-                                                         #    → pos가 6000이 들어와도
-                                                         #    → max_pos 4096에 맞는 각도 범위에 압축
-                                                         # 결과적으로, 포지션 정보가 “너무 빠르게 반복되지 않도록” 각도를 좁힘
+        if max_seq > self.original_max_seq_len:             # 예) 6000 > 4096  
+            scale    = max_seq / self.original_max_seq_len  #    scale = 6000 / 4096 ≈ 1.46
+            inv_freq = self.inv_freq / scale                #    기존 주파수(inv_freq)를 1.46배로 "느리게" 만들어줌 
+                                                            # 즉, position_ids × (inv_freq/scale)
+                                                            #    → pos가 6000이 들어와도
+                                                            #    → max_pos 4096에 맞는 각도 범위에 압축
+                                                            # 결과적으로, 포지션 정보가 “너무 빠르게 반복되지 않도록” 각도를 좁힘
         else:
             inv_freq = self.inv_freq
             
@@ -204,7 +204,30 @@ class RotaryEmbedding(nn.Module):
         #             → freqs = [θ₀, θ₁, θ₂, θ₃] 
         #             → torch.cat([freqs, freqs], dim=-1) 적용
         #             → [θ₀, θ₁, θ₂, θ₃, θ₀, θ₁, θ₂, θ₃]
-        # ii) freqs(각도)를 똑같이 한 번 더 붙여서 차원을 2배로 늘리는 것
+        # ii) 왜 freqs(각도)를 똑같이 한 번 더 붙여서 차원을 2배로 늘렸는가?
+        #     → 로터리 임베딩의 “cos/sin interleave 구조” 때문
+        #     → 예)
+        #        → freqs = [θ₀, θ₁, θ₂, θ₃] 라면, # [batch, seq_len, dim//2]
+        #        → 각 position에서 dim/2개의 θ(각도)
+        #        → 왜 dim/2인 이유는, cos/sin쌍을 만들기 때문
+        #            → (0,1): θ₀ 
+        #            → (2,3): θ₁ 
+        #            → (4,5): θ₂
+        #        → dim/2 > concat > dim 
+        #            → emb = [θ₀, θ₁, θ₂, θ₃] > concat > emb = [θ₀, θ₁, θ₂, θ₃, θ₀, θ₁, θ₂, θ₃]
+        #            → (cos(θ₀), sin(θ₀), cos(θ₁), sin(θ₁), ...)
+        #                → cos(θ₀)와 sin(θ₀)의 θ₀는 다르다!
+        #                → cos는 [θ₀, θ₁, θ₂, θ₃,, : 앞에서 4번째까지  
+        #                → sim는 ,θ₀, θ₁, θ₂, θ₃]  : 5번째에서 마지막까지 
+        #                → 즉, 다음과 같다. (interleave mapping)
+        #                    → 0번 차원: cos(emb[0]) = cos(θ₀) 
+        #                    → 1번 차원: sin(emb[4]) = sin(θ₀) 
+        #                    → 2번 차원: cos(emb[1]) = cos(θ₁) 
+        #                    → 3번 차원: sin(emb[5]) = sin(θ₁) 
+        #                    → 4번 차원: cos(emb[2]) = cos(θ₂) 
+        #                    → 5번 차원: sin(emb[6]) = sin(θ₂) 
+        #                    → 6번 차원: cos(emb[3]) = cos(θ₃)
+        #                    → 7번 차원: sin(emb[7]) = sin(θ₃)
         emb = torch.cat([freqs, freqs], dim=-1)
         
         # Compute cos and sin
