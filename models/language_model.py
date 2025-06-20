@@ -144,11 +144,11 @@ class RotaryEmbedding(nn.Module):
         #
         # RoPE의 범위를 넘어서는 긴 시퀀스에 대해서 동적으로 scaling
         #     → RoPE가 시퀀스 길이가 “학습/설계시의 최대 길이”보다 더 길 때 회전 주파수(frequency)를 "스케일링"해서, 포지션 정보를 뭉개지지 않게 보존하는 트릭
-        #     → position_ids: (batch, seq_len) tensor, 각 토큰의 position(0, 1, 2, ...) 
+        #     → position_ids: (batch, seq_len) tensor, 각 토큰의 position = [0, 1, 2, ...] 
         #     → max_seq: 입력받은 전체 배치 중 가장 큰 position + 1 
         #     → 예) position_ids.max()가 511이면, max_seq=512 즉, 현재 들어온 데이터에서 "가장 긴 시퀀스 길이"를 의미
         #     → 그런데, 왜 이러한 구성을 하는가?
-        #         → RoPE의 한계 RoPE의 주파수(inv_freq)는 처음 모델을 설계할 때 최대 시퀀스 길이(lm_max_position_embeddings(ex: 2048, 4096, 8192 등))에 제약되어 생성.
+        #         → RoPE의 한계:  RoPE의 주파수(inv_freq)는 처음 모델을 설계할 때 최대 시퀀스 길이(lm_max_position_embeddings(ex: 2048, 4096, 8192 등))에 제약되어 생성.
         #         → 그런데, 실제 inference/training에서 더 긴 시퀀스(예: 4096 → 6000)를 넣으면,
         #         → 포지션 각도(θ=pos×freq)가 너무 커져서 sin/cos이 너무 빨리 주기적으로 반복 
         #         → "포지션 구분이 안 되고 겹침(알리아싱/포지션 정보 소실)"
