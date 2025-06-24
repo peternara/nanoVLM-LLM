@@ -98,12 +98,12 @@ def get_dataloaders(train_cfg, vlm_cfg):
     val_size = int(total_samples * train_cfg.val_ratio)
     train_size = total_samples - val_size
 
-    train_dataset = VQADataset(train_ds.select(range(train_size)), tokenizer, image_processor)
-    val_dataset = VQADataset(train_ds.select(range(train_size, total_samples)), tokenizer, image_processor)
-    test_dataset = MMStarDataset(test_ds['val'], tokenizer, image_processor)
+    train_dataset   = VQADataset(train_ds.select(range(train_size)), tokenizer, image_processor)
+    val_dataset     = VQADataset(train_ds.select(range(train_size, total_samples)), tokenizer, image_processor)
+    test_dataset    = MMStarDataset(test_ds['val'], tokenizer, image_processor)
 
     # Create collators
-    vqa_collator = VQACollator(tokenizer, vlm_cfg.lm_max_length, vlm_cfg.mp_image_token_length)
+    vqa_collator    = VQACollator(tokenizer, vlm_cfg.lm_max_length, vlm_cfg.mp_image_token_length)
     mmstar_collator = MMStarCollator(tokenizer, vlm_cfg.mp_image_token_length)
 
     g = torch.Generator()
@@ -263,9 +263,12 @@ def train(train_cfg, vlm_cfg):
     global_step = 0
     for epoch in range(train_cfg.epochs):
         epoch_start_time = time.time()
+        #
         model.train()
-        total_train_loss = 0
+        #
+        total_train_loss       = 0
         total_tokens_processed = 0
+        #
         optimizer.zero_grad()
 
         for i, batch in enumerate(train_loader):
@@ -310,8 +313,9 @@ def train(train_cfg, vlm_cfg):
                 if train_cfg.max_grad_norm is not None:
                     grad_norm = torch.nn.utils.clip_grad_norm_(all_params, max_norm=train_cfg.max_grad_norm)
 
-                adj_lr_mp = get_lr(global_step, train_cfg.lr_mp, len(train_loader) * train_cfg.epochs // train_cfg.gradient_accumulation_steps)
+                adj_lr_mp        = get_lr(global_step, train_cfg.lr_mp, len(train_loader) * train_cfg.epochs // train_cfg.gradient_accumulation_steps)
                 adj_lr_backbones = get_lr(global_step, train_cfg.lr_backbones, len(train_loader) * train_cfg.epochs // train_cfg.gradient_accumulation_steps)
+                #
                 optimizer.param_groups[0]['lr'] = adj_lr_mp
                 optimizer.param_groups[1]['lr'] = adj_lr_backbones
                 optimizer.step()
@@ -325,8 +329,8 @@ def train(train_cfg, vlm_cfg):
             num_tokens = torch.sum(attention_mask).item() # Sum of attention mask gives number of tokens
             total_tokens_processed += num_tokens
 
-            batch_end_time = time.time()
-            batch_duration = batch_end_time - batch_start_time
+            batch_end_time    = time.time()
+            batch_duration    = batch_end_time - batch_start_time
             tokens_per_second = num_tokens / batch_duration 
 
             # gather loss and t/s from all ranks if DDP
@@ -400,10 +404,10 @@ def train(train_cfg, vlm_cfg):
 
     # Summary Statistics
     if is_master():
-        avg_epoch_time = sum(epoch_times) / len(epoch_times)
-        total_training_time = sum(epoch_times)
+        avg_epoch_time         = sum(epoch_times) / len(epoch_times)
+        total_training_time     = sum(epoch_times)
         total_samples_processed = len(train_loader.dataset) * train_cfg.epochs
-        avg_time_per_sample = total_training_time / total_samples_processed
+        avg_time_per_sample     = total_training_time / total_samples_processed
         print(f"Average time per epoch: {avg_epoch_time:.2f}s")
         print(f"Average time per sample: {avg_time_per_sample:.4f}s")
 
