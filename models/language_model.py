@@ -583,17 +583,18 @@ class LanguageModelBlock(nn.Module):
 class LanguageModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.cfg = cfg
-        self.lm_use_tokens = cfg.lm_use_tokens
-        self.lm_tie_weights = cfg.lm_tie_weights
+        self.cfg             = cfg
+        self.lm_use_tokens   = cfg.lm_use_tokens
+        self.lm_tie_weights  = cfg.lm_tie_weights
 
         self.token_embedding = nn.Embedding(cfg.lm_vocab_size, cfg.lm_hidden_dim)
-        self.rotary_embd = RotaryEmbedding(cfg)
-        self.blocks = nn.ModuleList([
+        self.rotary_embd     = RotaryEmbedding(cfg)
+        self.blocks          = nn.ModuleList([
             LanguageModelBlock(cfg) for _ in range(cfg.lm_n_blocks)
         ])
-        self.norm = RMSNorm(cfg) # Final Norm
-        self.head = nn.Linear(cfg.lm_hidden_dim, cfg.lm_vocab_size, bias=False)
+        self.norm            = RMSNorm(cfg) # Final Norm
+        self.head            = nn.Linear(cfg.lm_hidden_dim, cfg.lm_vocab_size, bias=False)
+        
         if self.lm_tie_weights:
             self.head.weight = self.token_embedding.weight
 
@@ -715,7 +716,7 @@ class LanguageModel(nn.Module):
                 # Now the model outputs embeddings
                 next_output = last_output.unsqueeze(1)
 
-            generated_outputs = torch.cat((generated_outputs, next_output), dim=1)
+            generated_outputs       = torch.cat((generated_outputs, next_output), dim=1)
             
             # The token being processed is `next_token`. Its position is `generated_outputs.size(1) - 1`.
             current_token_start_pos = generated_outputs.size(1) - 1
@@ -749,11 +750,12 @@ class LanguageModel(nn.Module):
         # print(f"Original vocabulary size from pretrained model: {original_vocab_size}")
         
         # Configure model parameters from HF config
-        cfg.lm_hidden_dim = hf_config.hidden_size
-        cfg.lm_inter_dim = hf_config.intermediate_size
-        cfg.lm_rms_eps = hf_config.rms_norm_eps
-        cfg.lm_re_base = hf_config.rope_theta
+        cfg.lm_hidden_dim              = hf_config.hidden_size
+        cfg.lm_inter_dim               = hf_config.intermediate_size
+        cfg.lm_rms_eps                 = hf_config.rms_norm_eps
+        cfg.lm_re_base                 = hf_config.rope_theta
         cfg.lm_max_position_embeddings = hf_config.max_position_embeddings
+        
         # We're keeping our own vocab size in cfg, but checking it's larger than original
         if hasattr(cfg, 'lm_vocab_size'):
             if cfg.lm_vocab_size < original_vocab_size:
@@ -764,16 +766,16 @@ class LanguageModel(nn.Module):
             cfg.lm_vocab_size = original_vocab_size
             # print(f"Using original vocabulary size: {cfg.lm_vocab_size}")
         
-        cfg.lm_n_heads = hf_config.num_attention_heads
+        cfg.lm_n_heads    = hf_config.num_attention_heads
         cfg.lm_n_kv_heads = hf_config.num_key_value_heads
-        cfg.lm_dropout = hf_config.attention_dropout
-        cfg.lm_n_blocks = hf_config.num_hidden_layers
+        cfg.lm_dropout    = hf_config.attention_dropout
+        cfg.lm_n_blocks   = hf_config.num_hidden_layers
         
         # Create our model with potentially larger vocabulary
-        model = cls(cfg)
-        safetensors_file = hf_hub_download(repo_id=cfg.lm_model_type, filename="model.safetensors")
+        model             = cls(cfg)
+        safetensors_file  = hf_hub_download(repo_id=cfg.lm_model_type, filename="model.safetensors")
         
-        sd = model.state_dict()
+        sd                = model.state_dict()
         
         mapping = {
             'model.embed_tokens.weight': 'token_embedding.weight',
