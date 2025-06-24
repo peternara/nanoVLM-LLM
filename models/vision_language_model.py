@@ -147,6 +147,8 @@ class VisionLanguageModel(nn.Module):
         # The attention_mask comes from the collator and should already cover the full sequence.
         # 
         # multi-modal 모델을 language model로 구성
+        #    → https://github.com/peternara/nanoVLM-LLM/blob/main/models/config.py#L33 
+        #    → SmolLM2-360M-Instruct 이용
         logits, _ = self.decoder(updated_token_embd, attention_mask=attention_mask)
 
         loss = None
