@@ -20,7 +20,7 @@ class RMSNorm(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(cfg.lm_hidden_dim))
-        self.eps = cfg.lm_rms_eps
+        self.eps    = cfg.lm_rms_eps
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -32,9 +32,10 @@ class RMSNorm(nn.Module):
         Returns:
             torch.Tensor: Normalized tensor of the same shape as input.
         """
+        
         # Compute inverse of RMS: square the tensor element-wise, mean is computed across lm_hidden_dim.
         irms = torch.rsqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps) # inverse of RMS
-        x = x * irms * self.weight
+        x    = x * irms * self.weight
 
         return x
 
@@ -746,7 +747,7 @@ class LanguageModel(nn.Module):
         hf_config = AutoConfig.from_pretrained(cfg.lm_model_type)
         
         # Store original HF vocab size before we modify it
-        original_vocab_size = hf_config.vocab_size
+        original_vocab_size = hf_config.vocab_size        
         # print(f"Original vocabulary size from pretrained model: {original_vocab_size}")
         
         # Configure model parameters from HF config
