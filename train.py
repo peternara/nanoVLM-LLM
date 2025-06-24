@@ -70,7 +70,10 @@ def get_run_name(train_cfg, vlm_cfg):
     date          = time.strftime("%m%d-%H%M%S")
     vit           = f"{vlm_cfg.vit_model_type.split('/')[-1]}"
     mp            = f"mp{vlm_cfg.mp_pixel_shuffle_factor}"
-    llm           = f"{vlm_cfg.lm_model_type.split('/')[-1]}"
+    
+    # https://github.com/peternara/nanoVLM-LLM/blob/main/models/config.py#L33
+    #    → lm_model_type: str = 'HuggingFaceTB/SmolLM2-360M-Instruct'
+    llm           = f"{vlm_cfg.lm_model_type.split('/')[-1]}" # 
 
     return f"nanoVLM_{vit}_{mp}_{llm}_{num_gpus}_{dataset_size}_{batch_size}_{epochs}_{learning_rate}_{date}"
 
