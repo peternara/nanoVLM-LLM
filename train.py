@@ -95,7 +95,7 @@ def get_dataloaders(train_cfg, vlm_cfg):
     else:
         total_samples = min(len(train_ds), train_cfg.data_cutoff_idx)
 
-    val_size = int(total_samples * train_cfg.val_ratio)
+    val_size   = int(total_samples * train_cfg.val_ratio)
     train_size = total_samples - val_size
 
     train_dataset   = VQADataset(train_ds.select(range(train_size)), tokenizer, image_processor)
@@ -164,17 +164,17 @@ def test_mmstar(model, tokenizer, test_loader, device):
     correct_predictions = 0
     with torch.no_grad():
         for batch in test_loader:
-            image = batch['images'].to(device)
-            input_ids = batch['input_ids'].to(device)
-            labels = batch['labels'].to(device)
+            image          = batch['images'].to(device)
+            input_ids      = batch['input_ids'].to(device)
+            labels         = batch['labels'].to(device)
             attention_mask = batch['attention_mask'].to(device)
 
             correct_answer = tokenizer.batch_decode(labels, skip_special_tokens=True)
             
-            gen = model.generate(input_ids, image, attention_mask, greedy=True)
-            model_output = tokenizer.batch_decode(gen, skip_special_tokens=True)
+            gen            = model.generate(input_ids, image, attention_mask, greedy=True)
+            model_output   = tokenizer.batch_decode(gen, skip_special_tokens=True)
             
-            is_correct = utils.check_multiple_choice_with_regex(model_output, correct_answer)
+            is_correct     = utils.check_multiple_choice_with_regex(model_output, correct_answer)
             
             total_examples += len(is_correct)
             if is_correct:
