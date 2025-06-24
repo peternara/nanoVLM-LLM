@@ -62,22 +62,22 @@ def wrap_model(model):
     return DistributedDataParallel(model, device_ids=[dist.get_rank()])
 
 def get_run_name(train_cfg, vlm_cfg):
-    dataset_size = "full_ds" if train_cfg.data_cutoff_idx is None else f"{train_cfg.data_cutoff_idx}samples"
-    batch_size = f"bs{int(train_cfg.batch_size*get_world_size()*train_cfg.gradient_accumulation_steps)}"
-    epochs = f"ep{train_cfg.epochs}"
+    dataset_size  = "full_ds" if train_cfg.data_cutoff_idx is None else f"{train_cfg.data_cutoff_idx}samples"
+    batch_size    = f"bs{int(train_cfg.batch_size*get_world_size()*train_cfg.gradient_accumulation_steps)}"
+    epochs        = f"ep{train_cfg.epochs}"
     learning_rate = f"lr{train_cfg.lr_backbones}-{train_cfg.lr_mp}"
-    num_gpus = f"{get_world_size()}xGPU"
-    date = time.strftime("%m%d-%H%M%S")
-    vit = f"{vlm_cfg.vit_model_type.split('/')[-1]}"
-    mp = f"mp{vlm_cfg.mp_pixel_shuffle_factor}"
-    llm = f"{vlm_cfg.lm_model_type.split('/')[-1]}"
+    num_gpus      = f"{get_world_size()}xGPU"
+    date          = time.strftime("%m%d-%H%M%S")
+    vit           = f"{vlm_cfg.vit_model_type.split('/')[-1]}"
+    mp            = f"mp{vlm_cfg.mp_pixel_shuffle_factor}"
+    llm           = f"{vlm_cfg.lm_model_type.split('/')[-1]}"
 
     return f"nanoVLM_{vit}_{mp}_{llm}_{num_gpus}_{dataset_size}_{batch_size}_{epochs}_{learning_rate}_{date}"
 
 def get_dataloaders(train_cfg, vlm_cfg):
     # Create datasets
     image_processor = get_image_processor(vlm_cfg.vit_img_size)
-    tokenizer = get_tokenizer(vlm_cfg.lm_tokenizer, vlm_cfg.vlm_extra_tokens)
+    tokenizer       = get_tokenizer(vlm_cfg.lm_tokenizer, vlm_cfg.vlm_extra_tokens)
 
     # Load and combine all training datasets
     combined_train_data = []
