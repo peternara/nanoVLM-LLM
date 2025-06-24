@@ -145,6 +145,8 @@ class VisionLanguageModel(nn.Module):
 
         # The updated_token_embd is now the token_embd with image parts replaced.
         # The attention_mask comes from the collator and should already cover the full sequence.
+        # 
+        # multi-modal 모델을 language model로 구성
         logits, _ = self.decoder(updated_token_embd, attention_mask=attention_mask)
 
         loss = None
